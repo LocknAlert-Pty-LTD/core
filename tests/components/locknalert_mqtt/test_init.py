@@ -341,8 +341,9 @@ async def test_reload_service_raises_service_validation_error_on_bad_config(
     """Reload service raises ServiceValidationError when config YAML has errors."""
     await mqtt_mock_entry()
     bad_exc = ConfigValidationError(
+        "invalid_platform_config",
+        [vol.Invalid("invalid config")],
         translation_domain=DOMAIN,
-        translation_key="invalid_platform_config",
         translation_placeholders={"domain": "alarm_control_panel"},
     )
     with (
@@ -405,9 +406,9 @@ async def test_async_check_config_schema_invalid_raises(
     mqtt_data = hass.data[DATA_MQTT]
 
     # Register a schema that rejects everything.
-    mqtt_data.reload_schema["alarm_control_panel"] = vol.Schema(
-        vol.Invalid("always bad")
-    )
+    def _always_invalid(_v: object) -> None:
+        raise vol.Invalid("always bad")
+    mqtt_data.reload_schema["alarm_control_panel"] = vol.Schema(_always_invalid)
 
     with pytest.raises(ServiceValidationError):
         await async_check_config_schema(
@@ -559,7 +560,13 @@ async def test_reload_removes_invalid_platform_config_issues(
         is_persistent=False,
         severity=ir.IssueSeverity.ERROR,
         translation_key="invalid_platform_config",
-        translation_placeholders={"domain": "alarm_control_panel"},
+        translation_placeholders={
+            "domain": "alarm_control_panel",
+            "config_file": "configuration.yaml",
+            "line": "1",
+            "config": "platform: alarm_control_panel",
+            "error": "some validation error",
+        },
     )
     issue_reg = ir.async_get(hass)
     assert issue_reg.async_get_issue(DOMAIN, "stale_issue_id") is not None
